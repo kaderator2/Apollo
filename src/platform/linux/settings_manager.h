@@ -8,18 +8,16 @@ public:
   LinuxSettingsManager();
   ~LinuxSettingsManager() override;
 
-  // --- Interface Implementation (Corrected) ---
+  // --- Interface Implementation (Corrected to perfectly match the base class) ---
 
   display_device::EnumeratedDeviceList enumAvailableDevices() const override;
 
   std::string getDisplayName(const std::string &device_id) const override;
 
-  display_device::ApplyResult applySettings(const display_device::SingleDisplayConfiguration &config) override;
-
-  display_device::RevertResult revertSettings() override;
-
+  ApplyResult applySettings(const SingleDisplayConfiguration &config) override;
+  RevertResult revertSettings() override;
   bool resetPersistence() override;
 
 private:
-  display_device::EnumeratedDeviceList m_original_config;
+  std::vector<display_device::SingleDisplayConfiguration> m_original_config;
 };
