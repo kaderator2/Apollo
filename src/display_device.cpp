@@ -27,6 +27,10 @@
   #include <display_device/windows/win_display_device.h>
 #endif
 
+#ifdef __linux__
+  #include "platform/linux/settings_manager.h"
+#endif
+
 namespace display_device {
   namespace {
     constexpr std::chrono::milliseconds DEFAULT_RETRY_INTERVAL {5000};
@@ -624,6 +628,8 @@ namespace display_device {
           .m_hdr_blank_delay = video_config.dd.wa.hdr_toggle_delay != std::chrono::milliseconds::zero() ? std::make_optional(video_config.dd.wa.hdr_toggle_delay) : std::nullopt
         }
       );
+#elif defined(__linux__)
+      return std::make_unique<LinuxSettingsManager>();
 #else
       return nullptr;
 #endif
@@ -764,12 +770,14 @@ namespace display_device {
   }
 
   std::string map_display_name(const std::string &display_name) {
-    std::lock_guard lock { DD_DATA.mutex };
+    std::lock_guard lock {DD_DATA.mutex};
     if (!DD_DATA.sm_instance) {
       return {};
     }
 
-    const auto available_devices { DD_DATA.sm_instance->execute([](auto &settings_iface) { return settings_iface.enumAvailableDevices(); }) };
+    const auto available_devices {DD_DATA.sm_instance->execute([](auto &settings_iface) {
+      return settings_iface.enumAvailableDevices();
+    })};
 
     for (auto &i : available_devices) {
       if (i.m_display_name == display_name) {
@@ -781,8 +789,8 @@ namespace display_device {
   }
 
   void configure_display(const config::video_t &video_config, const rtsp_stream::launch_session_t &session) {
-    const auto result { parse_configuration(video_config, session) };
-    if (const auto *parsed_config { std::get_if<SingleDisplayConfiguration>(&result) }; parsed_config) {
+    const auto result {parse_configuration(video_config, session)};
+    if (const auto *parsed_config {std::get_if<SingleDisplayConfiguration>(&result)}; parsed_config) {
       configure_display(*parsed_config);
       return;
     }
