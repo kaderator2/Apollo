@@ -66,3 +66,6 @@
 	path = third-party/moonlight-common-c
 	url = https://github.com/ClassicOldSong/moonlight-common-c
 	branch = master
+[submodule "third-party/evdi"]
+	path = third-party/evdi
+	url = https://github.com/DisplayLink/evdi.git
