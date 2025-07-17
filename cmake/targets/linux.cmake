@@ -1,11 +1,16 @@
-# linux specific target definitions
-# Add Linux-specific source files
 target_sources(sunshine PRIVATE
+  # Standard Linux platform files
   "${CMAKE_SOURCE_DIR}/src/platform/linux/audio.cpp"
-  "${CMAKE_SOURCE_DIR}/src/platform/linux/display.cpp"
-  "${CMAKE_SOURCE_DIR}/src/platform/linux/input.cpp"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/cuda.cpp"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/cuda.cu"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/graphics.cpp"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/kmsgrab.cpp"
   "${CMAKE_SOURCE_DIR}/src/platform/linux/misc.cpp"
-  "${CMAKE_SOURCE_DIR}/src/platform/linux/process.cpp"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/publish.cpp"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/vaapi.cpp"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/wayland.cpp"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/wlgrab.cpp"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/x11grab.cpp"
 
   "${CMAKE_SOURCE_DIR}/src/platform/linux/virtual_display.cpp"
   "${CMAKE_SOURCE_DIR}/src/platform/linux/settings_manager.cpp"
@@ -28,4 +33,3 @@ else()
   # This will stop the build if the required libraries aren't found
   message(FATAL_ERROR "Could not find required libraries: libevdi and/or libXrandr.")
 endif()
-
