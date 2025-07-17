@@ -50,6 +50,8 @@ package-lock.json
 *.mo
 *.pot
 
+.cache/
+
 # Dummy macOS files
 .DS_Store
 

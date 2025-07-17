@@ -1,20 +1,18 @@
 #pragma once
 
 #include <display_device/settings_manager_interface.h>
+#include <display_device/types.h>
 #include <memory>
+#include <vector>
 
 class LinuxSettingsManager: public display_device::SettingsManagerInterface {
 public:
   LinuxSettingsManager();
   ~LinuxSettingsManager() override;
 
-  // --- Interface Implementation (Corrected to perfectly match the base class) ---
-
   display_device::EnumeratedDeviceList enumAvailableDevices() const override;
-
   std::string getDisplayName(const std::string &device_id) const override;
-
-  ApplyResult applySettings(const SingleDisplayConfiguration &config) override;
+  ApplyResult applySettings(const display_device::SingleDisplayConfiguration &config) override;
   RevertResult revertSettings() override;
   bool resetPersistence() override;
 

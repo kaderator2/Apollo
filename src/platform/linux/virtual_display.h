@@ -1,6 +1,6 @@
 #pragma once
 
-#include <evdi.h>  // The core library for Linux implementation
+#include <evdi_lib.h>  // The core library for Linux implementation
 #include <functional>
 #include <string>
 #include <vector>
