@@ -7,9 +7,7 @@ target_sources(sunshine PRIVATE
   "${CMAKE_SOURCE_DIR}/src/platform/linux/misc.cpp"
   "${CMAKE_SOURCE_DIR}/src/platform/linux/process.cpp"
 
-  # NEW: Add your Linux virtual display source files
   "${CMAKE_SOURCE_DIR}/src/platform/linux/virtual_display.cpp"
-  # Placeholder for the settings manager you will create next
   "${CMAKE_SOURCE_DIR}/src/platform/linux/settings_manager.cpp"
 )
 
