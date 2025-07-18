@@ -46,6 +46,8 @@ static std::string exec(const char *cmd) {
   return result;
 }
 
+// In settings_manager.cpp
+
 LinuxSettingsManager::LinuxSettingsManager() {
   if (VDISPLAY::openVDisplayDevice() != VDISPLAY::DRIVER_STATUS::OK) {
     std::cerr << "[LinuxSettingsManager] ERROR: Failed to open EVDI device during initialization." << std::endl;
@@ -59,42 +61,44 @@ LinuxSettingsManager::LinuxSettingsManager() {
     std::string xrandr_output = exec("xrandr -q");
     std::stringstream ss(xrandr_output);
     std::string line;
-    display_device::SingleDisplayConfiguration current_display;
-    bool new_display = false;
+    std::optional<display_device::SingleDisplayConfiguration> current_display;
+
+    // Regex to find a connected device, e.g., "DP-2 connected..."
+    std::regex device_regex(R"(^(\S+)\s+connected)");
+    // Regex to find the active mode line, e.g., "   3440x1440     144.00*+ ..."
+    std::regex active_mode_regex(R"(\s+\d+x\d+\s+([\d\.]+)\*.*)");
+    std::smatch match;
 
     while (std::getline(ss, line)) {
-      if (line.find(" connected") != std::string::npos) {
-        if (new_display) {
-          m_original_config.push_back(current_display);
+      if (std::regex_search(line, match, device_regex)) {
+        // Found a new device. If we were processing a previous one, save it.
+        if (current_display) {
+          m_original_config.push_back(*current_display);
         }
+        // Start configuration for the new device
+        current_display.emplace();  // Create a new object
+        current_display->m_device_id = match[1].str();
 
-        current_display = {};
-        current_display.m_device_id = line.substr(0, line.find(' '));
-
+        // Attempt to parse resolution from the "connected" line itself
         auto res = parse_resolution(line);
         if (res) {
-          current_display.m_resolution = *res;
+          current_display->m_resolution = *res;
         }
-        new_display = true;
 
-      } else if (new_display && line.find('*') != std::string::npos) {
-        std::stringstream line_ss(line);
-        std::string segment;
-        line_ss >> segment;
-        line_ss >> segment;
-
+      } else if (current_display && std::regex_search(line, match, active_mode_regex) && match.size() >= 2) {
+        // This is the active mode line for the current device
         try {
-          segment.erase(std::remove(segment.begin(), segment.end(), '*'), segment.end());
-          segment.erase(std::remove(segment.begin(), segment.end(), '+'), segment.end());
-          float rate = std::stof(segment);
-          current_display.m_refresh_rate = display_device::Rational {static_cast<unsigned int>(rate * 1000), 1000};
+          float rate = std::stof(match[1].str());
+          current_display->m_refresh_rate = display_device::Rational {static_cast<unsigned int>(rate * 1000), 1000};
+          std::cout << "[LinuxSettingsManager-DEBUG] Captured refresh rate " << rate << "Hz for device " << current_display->m_device_id << std::endl;
         } catch (const std::exception &e) {
-          // Ignore if parsing fails
+          std::cerr << "[LinuxSettingsManager-DEBUG] Failed to parse refresh rate from active mode line: " << line << std::endl;
         }
       }
     }
-    if (new_display) {
-      m_original_config.push_back(current_display);
+    // Push the last processed display
+    if (current_display) {
+      m_original_config.push_back(*current_display);
     }
 
     std::cout << "[LinuxSettingsManager] Successfully captured initial state for " << m_original_config.size() << " displays." << std::endl;

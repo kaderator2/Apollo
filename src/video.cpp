@@ -19,7 +19,6 @@ extern "C" {
 }
 
 // local includes
-#include "process.h"
 #include "cbs.h"
 #include "config.h"
 #include "display_device.h"
@@ -28,6 +27,7 @@ extern "C" {
 #include "logging.h"
 #include "nvenc/nvenc_base.h"
 #include "platform/common.h"
+#include "process.h"
 #include "sync.h"
 #include "video.h"
 
@@ -49,6 +49,18 @@ namespace video {
   bool allow_encoder_probing() {
     const auto devices {display_device::enumerate_devices()};
 
+#ifdef __linux__
+    // For Linux, we allow probing if we detect any display device at all,
+    // physical or virtual. The video pipeline can then select one to use.
+    if (devices.empty()) {
+      BOOST_LOG(error) << "No display devices were found! Cannot probe the encoders.";
+      return false;
+    }
+
+    BOOST_LOG(info) << "Found " << devices.size() << " display(s). Allowing encoder probing.";
+    return true;
+#endif
+
     // // If there are no devices, then either the API is not working correctly or OS does not support the lib.
     // // Either way we should not block the probing in this case as we can't tell what's wrong.
     // if (devices.empty()) {
@@ -56,13 +68,13 @@ namespace video {
     // }
 
     if (devices.empty()) {
-      #ifdef _WIN32
+#ifdef _WIN32
       // We'll create a temporary virtual display for probing anyways.
       if (proc::vDisplayDriverStatus == VDISPLAY::DRIVER_STATUS::OK) {
         return false;
       }
-      #endif
-        return true;
+#endif
+      return true;
     }
 
     // Since Windows 11 24H2, it is possible that there will be no active devices present
@@ -1073,7 +1085,7 @@ namespace video {
    */
   void refresh_displays(platf::mem_type_e dev_type, std::vector<std::string> &display_names, int &current_display_index, std::string &preferred_display_name) {
     // It is possible that the output name may be empty even if it wasn't before (device disconnected) or vice-versa
-    const auto output_name { display_device::map_output_name(config::video.output_name) };
+    const auto output_name {display_device::map_output_name(config::video.output_name)};
     std::string current_display_name = preferred_display_name;
 
     // If we have a current display index, let's start with that

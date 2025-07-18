@@ -52,13 +52,26 @@ namespace VDISPLAY {
       const std::string path = entry.path().string();
       if (path.rfind(drm_dir + "card", 0) == 0) {
         try {
-          vdisplay_handle = evdi_open(std::stoi(path.substr((drm_dir + "card").length())));
-          if (vdisplay_handle) {
-            card_number = std::stoi(path.substr((drm_dir + "card").length()));
+          int current_card_number = std::stoi(path.substr((drm_dir + "card").length()));
+          // --- ADD THIS LOGGING ---
+          std::cout << "[VDISPLAY-Linux-DEBUG] Attempting to open /dev/dri/card" << current_card_number << std::endl;
+
+          // Temporarily store the handle to check if it's valid
+          evdi_handle temp_handle = evdi_open(current_card_number);
+
+          if (temp_handle) {
+            // --- ADD THIS LOGGING ---
+            std::cout << "[VDISPLAY-Linux-DEBUG] Successfully received handle for card" << current_card_number << std::endl;
+            vdisplay_handle = temp_handle;
+            card_number = current_card_number;
             std::cout << "[VDISPLAY-Linux] Found EVDI device at: " << path << std::endl;
             break;
+          } else {
+            // --- ADD THIS LOGGING ---
+            std::cerr << "[VDISPLAY-Linux-DEBUG] Failed to open /dev/dri/card" << current_card_number << ". Handle is null." << std::endl;
           }
         } catch (const std::invalid_argument &ia) {
+          // This is fine, just ignore non-numeric card suffixes
           continue;
         }
       }
@@ -66,6 +79,8 @@ namespace VDISPLAY {
 
     if (!vdisplay_handle) {
       std::cerr << "[VDISPLAY-Linux] ERROR: No EVDI device found. Is the evdi kernel module loaded?" << std::endl;
+      std::cerr << "[VDISPLAY-Linux] SUGGESTION: Check for version mismatch between libevdi and the kernel module. Also check Xorg/Wayland logs." << std::endl;
+
       return DRIVER_STATUS::FAILED;
     }
 
@@ -254,7 +269,6 @@ namespace VDISPLAY {
 
       std::cout << "[VDISPLAY-Linux] Found new display output: " << displayName << std::endl;
 
-      std::string modeName = std::to_string(width) + "x" + std::to_string(height) + "_" + std::to_string(fps);
       std::string cvt_cmd = "cvt " + std::to_string(width) + " " + std::to_string(height) + " " + std::to_string(fps);
       std::string cvt_output = exec(cvt_cmd.c_str());
 
@@ -267,19 +281,29 @@ namespace VDISPLAY {
       std::string modeline = cvt_output.substr(modeline_start + strlen("Modeline "));
       modeline.erase(0, modeline.find_first_not_of(" \n\r\t"));
 
+      // --- NEW: Extract the exact mode name from the modeline ---
+      std::string modeName = modeline.substr(0, modeline.find(" "));
+      modeName.erase(std::remove(modeName.begin(), modeName.end(), '"'), modeName.end());
+
       std::string cmd;
+      system(("xrandr --delmode " + displayName + " " + modeName).c_str());
 
       cmd = "xrandr --newmode " + modeline;
       std::cout << "[VDISPLAY-Linux] Executing: " << cmd << std::endl;
       system(cmd.c_str());
 
+      // Use the correctly parsed modeName
       cmd = "xrandr --addmode " + displayName + " " + modeName;
       std::cout << "[VDISPLAY-Linux] Executing: " << cmd << std::endl;
       system(cmd.c_str());
 
+      // Use the correctly parsed modeName
       cmd = "xrandr --output " + displayName + " --mode " + modeName;
       std::cout << "[VDISPLAY-Linux] Executing: " << cmd << std::endl;
       system(cmd.c_str());
+
+      std::cout << "[VDISPLAY-Linux] Waiting for display to stabilize..." << std::endl;
+      std::this_thread::sleep_for(std::chrono::seconds(1));  // 1-second delay
 
       std::cout << "[VDISPLAY-Linux] Virtual display '" << displayName << "' created and configured." << std::endl;
       return displayName;
@@ -333,7 +357,6 @@ namespace VDISPLAY {
               << width << "x" << height << " @ " << refresh_rate << "Hz" << std::endl;
 
     try {
-      std::string modeName = std::to_string(width) + "x" + std::to_string(height) + "_" + std::to_string(refresh_rate);
       std::string cvt_cmd = "cvt " + std::to_string(width) + " " + std::to_string(height) + " " + std::to_string(refresh_rate);
       std::string cvt_output = exec(cvt_cmd.c_str());
 
@@ -345,27 +368,28 @@ namespace VDISPLAY {
       std::string modeline = cvt_output.substr(modeline_start + strlen("Modeline "));
       modeline.erase(0, modeline.find_first_not_of(" \n\r\t"));
 
-      std::string cmd;
+      std::string modeName = modeline.substr(0, modeline.find(" "));
+      modeName.erase(std::remove(modeName.begin(), modeName.end(), '"'), modeName.end());
 
-      cmd = "xrandr --newmode " + modeline;
-      std::cout << "[VDISPLAY-Linux] Executing: " << cmd << std::endl;
-      if (system(cmd.c_str()) != 0) {
-        std::cerr << "[VDISPLAY-Linux] ERROR: xrandr --newmode failed." << std::endl;
-        return -1;
-      }
+      // --- REVISED LOGIC ---
 
-      cmd = "xrandr --addmode " + std::string(deviceName) + " " + modeName;
-      std::cout << "[VDISPLAY-Linux] Executing: " << cmd << std::endl;
-      if (system(cmd.c_str()) != 0) {
-        std::cerr << "[VDISPLAY-Linux] ERROR: xrandr --addmode failed." << std::endl;
-        system(("xrandr --delmode " + std::string(deviceName) + " " + modeName).c_str());
-        return -1;
-      }
+      // 1. Create the mode. We don't check for errors because it might already exist, which is fine.
+      std::string newmode_cmd = "xrandr --newmode " + modeline;
+      std::cout << "[VDISPLAY-Linux] Executing: " << newmode_cmd << std::endl;
+      system(newmode_cmd.c_str());
 
-      cmd = "xrandr --output " + std::string(deviceName) + " --mode " + modeName;
-      std::cout << "[VDISPLAY-Linux] Executing: " << cmd << std::endl;
-      if (system(cmd.c_str()) != 0) {
+      // 2. Add the mode to the display. We don't check for errors because it might already be added.
+      std::string addmode_cmd = "xrandr --addmode " + std::string(deviceName) + " " + modeName;
+      std::cout << "[VDISPLAY-Linux] Executing: " << addmode_cmd << std::endl;
+      system(addmode_cmd.c_str());
+
+      // 3. This is the only command that MUST succeed. It activates the mode.
+      std::string output_cmd = "xrandr --output " + std::string(deviceName) + " --mode " + modeName;
+      std::cout << "[VDISPLAY-Linux] Executing: " << output_cmd << std::endl;
+      if (system(output_cmd.c_str()) != 0) {
         std::cerr << "[VDISPLAY-Linux] ERROR: xrandr --output --mode failed." << std::endl;
+        // As a last resort, try to just turn the display on automatically
+        system(("xrandr --output " + std::string(deviceName) + " --auto").c_str());
         return -1;
       }
 

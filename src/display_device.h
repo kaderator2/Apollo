@@ -51,7 +51,7 @@ namespace display_device {
   [[nodiscard]] std::string map_output_name(const std::string &output_name);
 
   [[nodiscard]] std::string
-  map_display_name(const std::string &display_name);
+    map_display_name(const std::string &display_name);
 
   /**
    * @brief Configure the display device based on the user configuration and the session information.
