@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Apollo (Terminal)
+Comment=Self-hosted game stream host for Artemis
+Exec=sunshine
+Icon=com.SudoMaker.dev.Apollo
+Terminal=true
+Type=Application
+Categories=Game;Network;
