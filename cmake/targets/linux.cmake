@@ -20,7 +20,7 @@ target_sources(sunshine PRIVATE
 
   # Linux virtual display source files
   # "${CMAKE_SOURCE_DIR}/src/platform/linux/virtual_display.cpp"
-  # "${CMAKE_SOURCE_DIR}/src/platform/linux/settings_manager.cpp"
+  "${CMAKE_SOURCE_DIR}/src/platform/linux/LinuxSettingsManager.cpp"
 )
 
 # --- Find and link libraries for virtual display ---
