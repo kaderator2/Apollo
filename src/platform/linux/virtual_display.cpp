@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <regex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -14,7 +16,8 @@
 
 evdi_handle VDISPLAY::vdisplay_handle = nullptr;
 
-// --- Helper Function ---
+// --- Helper Functions ---
+
 /**
  * @brief Executes a command and returns its standard output.
  * @param cmd The command to execute.
@@ -31,6 +34,26 @@ std::string exec(const char *cmd) {
     result += buffer.data();
   }
   return result;
+}
+
+static std::set<std::string> get_connected_displays() {
+  std::set<std::string> displays;
+  try {
+    std::string xrandr_output = exec("xrandr -q");
+    std::stringstream ss(xrandr_output);
+    std::string line;
+    std::regex device_regex(R"(^(\S+)\s+connected)");
+    std::smatch match;
+
+    while (std::getline(ss, line)) {
+      if (std::regex_search(line, match, device_regex)) {
+        displays.insert(match[1].str());
+      }
+    }
+  } catch (const std::runtime_error &e) {
+    std::cerr << "[VDISPLAY-Linux] ERROR executing xrandr: " << e.what() << std::endl;
+  }
+  return displays;
 }
 
 namespace VDISPLAY {
@@ -117,6 +140,10 @@ namespace VDISPLAY {
     }
 
     std::cout << "[VDISPLAY-Linux] Creating virtual display for client: " << s_client_uid << std::endl;
+
+    // --- NEW LOGIC: Reliably find the new display ---
+    // 1. Get the set of displays BEFORE we connect
+    auto displays_before = get_connected_displays();
 
     // Use a standard EDID block for evdi_connect.
     // This is a standard 128-byte EDID for a generic 1920x1080 display.
@@ -252,7 +279,32 @@ namespace VDISPLAY {
     };
 
     // Connect the virtual display.
+    // 2. Connect the virtual display.
     evdi_connect(vdisplay_handle, edid, sizeof(edid), 0);
+    std::cout << "[VDISPLAY-Linux] EVDI display connected. Searching for new display output..." << std::endl;
+
+    // 3. Find the NEW display by comparing the lists
+    std::string displayName;
+    for (int i = 0; i < 5; ++i) {  // Retry for a few seconds
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+      auto displays_after = get_connected_displays();
+      std::set<std::string> new_displays;
+      std::set_difference(displays_after.begin(), displays_after.end(), displays_before.begin(), displays_before.end(), std::inserter(new_displays, new_displays.begin()));
+
+      if (!new_displays.empty()) {
+        displayName = *new_displays.begin();
+        break;
+      }
+    }
+    // --- END OF NEW LOGIC ---
+
+    if (displayName.empty()) {
+      std::cerr << "[VDISPLAY-Linux] ERROR: Could not find the name of the new virtual display." << std::endl;
+      evdi_disconnect(vdisplay_handle);
+      return "";
+    }
+
+    std::cout << "[VDISPLAY-Linux] Found new virtual display: " << displayName << std::endl;
 
     std::cout << "[VDISPLAY-Linux] EVDI display connected. Configuring with xrandr..." << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -303,7 +355,7 @@ namespace VDISPLAY {
       system(cmd.c_str());
 
       std::cout << "[VDISPLAY-Linux] Waiting for display to stabilize..." << std::endl;
-      std::this_thread::sleep_for(std::chrono::seconds(1));  // 1-second delay
+      std::this_thread::sleep_for(std::chrono::seconds(6));  // 1-second delay
 
       std::cout << "[VDISPLAY-Linux] Virtual display '" << displayName << "' created and configured." << std::endl;
       return displayName;

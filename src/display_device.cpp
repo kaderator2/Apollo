@@ -811,6 +811,16 @@ namespace display_device {
       return;
     }
 
+#ifdef __linux__
+    // On Linux, we make this call synchronous (blocking) to ensure the
+    // virtual display is fully created before the video pipeline starts.
+    DD_DATA.sm_instance->execute([config](auto &settings_iface, auto &stop_token) {
+      if (settings_iface.applySettings(config) != SettingsManagerInterface::ApplyResult::ApiTemporarilyUnavailable) {
+        stop_token.requestStop();
+      }
+    });
+#else
+    // On all other platforms (e.g., Windows), we keep the original asynchronous behavior.
     DD_DATA.sm_instance->schedule([config](auto &settings_iface, auto &stop_token) {
       // We only want to keep retrying in case of a transient errors.
       // In other cases, when we either fail or succeed we just want to stop...
@@ -819,6 +829,7 @@ namespace display_device {
       }
     },
                                   {.m_sleep_durations = {DEFAULT_RETRY_INTERVAL}});
+#endif
   }
 
   void revert_configuration() {
